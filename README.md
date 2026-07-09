@@ -1,5 +1,6 @@
 # gio-git-github-repo-fetcher 
 ![Static Badge](https://img.shields.io/badge/.NET__10.0-512bd4) ![Static Badge](https://img.shields.io/badge/C%23_-145124)
+![GitHub Repo](https://img.shields.io/badge/github-repo-blue?logo=github) ![YouTube Channel Subscribers](https://img.shields.io/youtube/channel/subscribers/UCkYln5VJT8CeP8KQpL6S3GA)
 
 
 
