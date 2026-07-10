@@ -1,0 +1,49 @@
+name: Auto Log Changelog
+
+on:
+  push:
+    branches:
+      - main  # Change to master if your default branch uses that name
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  update-changelog:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history so we can grab recent commits
+
+      - name: Update CHANGELOG.md
+        run: |
+          # Create file if it doesn't exist
+          touch CHANGELOG.md
+          
+          # Create a temporary file for the new entries
+          echo "## Updates on $(date +'%Y-%m-%d %H:%M:%S')" > new_changes.txt
+          echo "" >> new_changes.txt
+          
+          # Get commits since the last push (or last 5 commits as a fallback)
+          git log -n 5 --pretty=format:"* %s (%h)" >> new_changes.txt
+          echo "" >> new_changes.txt
+          echo "---" >> new_changes.txt
+          echo "" >> new_changes.txt
+          
+          # Prepend new changes to the top of the existing changelog
+          cat CHANGELOG.md >> new_changes.txt
+          mv new_changes.txt CHANGELOG.md
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add CHANGELOG.md
+          git commit -m "chore: update CHANGELOG.md [skip ci]" || echo "No changes to commit"
+          git push
