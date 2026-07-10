@@ -1,0 +1,32 @@
+{
+  "product": "gio-git",
+  "company": "pi-40",
+  "license": "LICENSE",
+  "upgrade-code": "8ef439b1-6b3a-4467-9ba3-b26a578efcde",
+  "version": "1.0.0",
+  "arch": "amd64",
+  "files": {
+    "directories": [
+      "assets"
+    ],
+    "items": [
+      "cmd/fetcher/gio-git.exe"
+    ]
+  },
+  "shortcuts": [
+    {
+      "name": "gio-git",
+      "target": "gio-git.exe",
+      "description": "Gio GUI layout to fetch GitHub repository details"
+    }
+  ],
+  "env": [
+    {
+      "name": "PATH",
+      "value": "[INSTALLDIR]",
+      "permanent": false,
+      "system": true,
+      "action": "set"
+    }
+  ]
+}
