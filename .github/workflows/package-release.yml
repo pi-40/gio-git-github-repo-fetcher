@@ -11,7 +11,7 @@ on:
 
 jobs:
   build-and-package:
-    runs-on: ubuntu-latest # Go builds faster and easier on Linux
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
@@ -26,13 +26,18 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22' # Change this to your Go version if needed
+          go-version: '1.22'
+          cache: false # Disables the automatic check for go.sum so it won't crash
 
-      - name: Build Application
+      # Runs module initialization if go.mod doesn't exist yet, then builds
+      - name: Initialize and Build Application
         run: |
+          if [ ! -f go.mod ]; then
+            go mod init gio-git-github-repo-fetcher
+          fi
+          go mod tidy
           go build -v -o repo-fetcher
 
-      # Packages the binary into a universal tarball/zip archive asset attached to your release
       - name: Package Archive
         run: |
           tar -czvf repo-fetcher-package.tar.gz repo-fetcher
