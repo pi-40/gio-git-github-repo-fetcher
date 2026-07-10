@@ -27,11 +27,18 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # Bypasses the broken .slnx file and builds the actual project file directly
+      # Uses PowerShell to locate the actual file path dynamically
       - name: Build and Pack NuGet Project Directly
+        shell: powershell
         run: |
-          dotnet build **/*.csproj --configuration Release
-          dotnet pack **/*.csproj --configuration Release --output ./nupkgs
+          $csproj = Get-ChildItem -Recurse -Filter *.csproj | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $csproj) {
+              Write-Error "Could not find any .csproj file in the repository!"
+              exit 1
+          }
+          Write-Host "Found project file: $csproj"
+          dotnet build "$csproj" --configuration Release
+          dotnet pack "$csproj" --configuration Release --output ./nupkgs
 
       - name: Push to GitHub Packages Registry
         run: |
