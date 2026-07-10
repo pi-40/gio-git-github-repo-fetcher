@@ -1,0 +1,30 @@
+name: Package Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-package:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Add your build steps here. 
+      # Example for a C# / .NET project:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      # Example: Publishing a NuGet package to GitHub Packages
+      - name: Publish Package
+        run: dotnet nuget push **/*.nupkg --source "https://nuget.pkg.github.com/pi-40/index.json" --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
