@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Automatically tag its PRs so your contributor scripts can track them
+    labels:
+      - "dependencies"
+      - "bot-contribution"
+    # Optional: Automatically assign yourself to review its pull requests
+    assignees:
+      - "pi-40"
