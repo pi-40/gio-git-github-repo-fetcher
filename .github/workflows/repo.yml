@@ -1,13 +1,13 @@
 name: Generate Repo Root Structure
 
 on:
-  workflow_dispatch: # This allows you to trigger it manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build-structure:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Grants the action permission to commit new folders to your repo
+      contents: write
 
     steps:
       - name: Checkout Code
@@ -15,21 +15,14 @@ jobs:
 
       - name: Create Enterprise Root Directories
         run: |
-          # 1. Dev environments & configuration templates
           mkdir -p .devcontainer
           mkdir -p .vscode
           mkdir -p .config
           mkdir -p .githooks
-
-          # 2. GitHub Platform automation & template folders
           mkdir -p .github/workflows
           mkdir -p .github/ISSUE_TEMPLATE
           mkdir -p .github/LINTERS
-
-          # 3. Documentation assets
           mkdir -p .docs
-
-          # 4. Standard application codebase folders
           mkdir -p cmd/fetcher
           mkdir -p pkg/github
           mkdir -p ui
@@ -37,7 +30,6 @@ jobs:
 
       - name: Seed Directories with Tracking Files
         run: |
-          # Git requires a file inside a folder to track and display it on GitHub
           touch .devcontainer/.gitkeep
           touch .vscode/.gitkeep
           touch .config/.gitkeep
@@ -53,14 +45,14 @@ jobs:
       - name: Commit and Push Structural Updates
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
           git add -A
           
-          # Only commit if changes are detected to prevent workflow execution errors
           if ! git diff-index --quiet HEAD; then
             git commit -m "chore: initialize professional root folder structure"
-            git push origin HEAD:${{ github.ref_name }}
+            # Explicitly state refs/heads/ to prevent "dst refspec matches more than one"
+            git push origin HEAD:refs/heads/${{ github.ref_name }}
           else
             echo "All folders already exist. No updates needed."
           fi
