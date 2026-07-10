@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
-      packages: write  # Crucial permission so the bot can upload to GitHub Packages
+      packages: write
 
     steps:
       - name: Checkout Source Code
@@ -25,15 +25,14 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x' # Updates to your target .NET version if needed
+          dotnet-version: '8.0.x'
 
-      # Finds your .csproj file anywhere in the repo, builds it, and creates the .nupkg file
-      - name: Build and Pack NuGet
+      # Bypasses the broken .slnx file and builds the actual project file directly
+      - name: Build and Pack NuGet Project Directly
         run: |
-          dotnet build --configuration Release
-          dotnet pack --configuration Release --output ./nupkgs
+          dotnet build **/*.csproj --configuration Release
+          dotnet pack **/*.csproj --configuration Release --output ./nupkgs
 
-      # Pushes the generated .nupkg file straight to your personal/repo GitHub Package Registry
       - name: Push to GitHub Packages Registry
         run: |
           dotnet nuget push "./nupkgs/*.nupkg" --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
