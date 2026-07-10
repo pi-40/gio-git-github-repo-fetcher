@@ -1,59 +1,39 @@
-name: Package Release (Manual Trigger)
+name: Push NuGet Package to GitHub Packages
 
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Tag or branch to package (Leave blank for default branch)'
+        description: 'Branch or Tag to build (Leave blank for default)'
         required: false
         default: 'main'
         type: string
 
 jobs:
-  build-and-package:
-    runs-on: ubuntu-latest
+  deploy-nuget:
+    runs-on: windows-latest
     permissions:
-      contents: write
-      packages: write
+      contents: read
+      packages: write  # Crucial permission so the bot can upload to GitHub Packages
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.release_tag || github.ref }}
-          fetch-depth: 0
 
-      - name: Inspect Workspace Files
-        run: |
-          echo "=== Here are the files the bot sees inside your repository ==="
-          ls -R
-          echo "=========================================================="
-
-      - name: Smart Build and Package
-        run: |
-          # 1. Look for Go files somewhere in the project
-          if find . -name "*.go" | grep -q "."; then
-            echo "Found Go source files! Initializing and compiling..."
-            if [ ! -f go.mod ]; then
-              go mod init gio-git-github-repo-fetcher || true
-            fi
-            go mod tidy || true
-            go build -v -o repo-fetcher ./... || go build -v -o repo-fetcher main.go || true
-            tar -czvf repo-package.tar.gz repo-fetcher
-          
-          # 2. If it's a web tool or script repository (HTML, JS, Python, AutoIt, etc.)
-          else
-            echo "No compiler language found. Packaging repository files into a universal zip asset..."
-            zip -r repo-package.zip . -x "*.git*" -x ".github*"
-          fi
-
-      - name: Upload Package Asset to Release
-        uses: softprops/action-gh-release@v2
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
         with:
-          tag_name: ${{ github.event.inputs.release_tag || 'latest' }}
-          files: |
-            repo-package.tar.gz
-            repo-package.zip
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          dotnet-version: '8.0.x' # Updates to your target .NET version if needed
+
+      # Finds your .csproj file anywhere in the repo, builds it, and creates the .nupkg file
+      - name: Build and Pack NuGet
+        run: |
+          dotnet build --configuration Release
+          dotnet pack --configuration Release --output ./nupkgs
+
+      # Pushes the generated .nupkg file straight to your personal/repo GitHub Package Registry
+      - name: Push to GitHub Packages Registry
+        run: |
+          dotnet nuget push "./nupkgs/*.nupkg" --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
