@@ -27,7 +27,6 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # Uses PowerShell to locate the actual file path dynamically
       - name: Build and Pack NuGet Project Directly
         shell: powershell
         run: |
@@ -40,6 +39,14 @@ jobs:
           dotnet build "$csproj" --configuration Release
           dotnet pack "$csproj" --configuration Release --output ./nupkgs
 
+      # Uses PowerShell to find the actual .nupkg file name dynamically
       - name: Push to GitHub Packages Registry
+        shell: powershell
         run: |
-          dotnet nuget push "./nupkgs/*.nupkg" --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
+          $nupkg = Get-ChildItem -Path ./nupkgs -Filter *.nupkg | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $nupkg) {
+              Write-Error "No .nupkg file found to push!"
+              exit 1
+          }
+          Write-Host "Pushing package: $nupkg"
+          dotnet nuget push "$nupkg" --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
