@@ -27,6 +27,9 @@ This program was made as a C# WinForms app rather than an Insiders version. It w
 | .Net10.0 Framework |
 | Windows x64 Computer|
 
+## Safely Precaution
+Do not download releases from unknown GitHub repositories. If you must use an unfamiliar repo, inspect the source code first to verify it contains no malicious files.
+
 ## License
 
 **License:** This Project Is Licensed Under MIT License
