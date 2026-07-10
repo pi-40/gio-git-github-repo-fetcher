@@ -44,7 +44,7 @@ gio-git https://github.com/pi-40/gio-git-github-repo-fetcher
 git clone https://github.com && code-insiders gio-git-github-repo-fetcher
 ```
 
-1.0.2
+## 1.0.2
 New features added: 2 new commands
 ```
 git-halloffame
