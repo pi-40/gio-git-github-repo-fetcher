@@ -1,3 +1,13 @@
+## Updates on 2026-07-10 01:51:24
+
+* Create wix.json (By: Pi40) [d29b5f6]
+* chore: update CHANGELOG.md [skip ci] (By: github-actions[bot]) [3b7f70e]
+* Delete assets directory (By: Pi40) [c64490e]
+* chore: update CHANGELOG.md [skip ci] (By: github-actions[bot]) [5be2a75]
+* Delete pkg/github/.gitkeep (By: Pi40) [44e6641]
+
+---
+
 ## Updates on 2026-07-10 01:49:13
 
 * Delete assets directory (By: Pi40) [c64490e]
