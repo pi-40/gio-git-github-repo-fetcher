@@ -1,0 +1,644 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace WinFormsApp6
+{
+    public partial class Form1 : Form
+    {
+        private string currentPrompt = "C:";
+        private int lastPromptPosition = 0;
+
+        private List<GitHubRelease> releases = new List<GitHubRelease>();
+        private List<GitHubRepo> searchResults = new List<GitHubRepo>();
+
+        private enum NavMode { Normal, Releases, Packages, SearchResults }
+        private NavMode currentMode = NavMode.Normal;
+
+        private int selectedReleaseIndex = -1;
+        private int selectedPackageIndex = -1;
+        private int selectedSearchIndex = -1;
+        private int navStartTextPosition = 0;
+
+        private bool isDownloading = false;
+        private bool isCheckingForSelfUpdate = false;
+        private List<GitHubRelease> selfUpdateReleases = new List<GitHubRelease>();
+
+        // Win32 APIs for styling and hiding scrollbars
+        [DllImport("dwmapi.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        public static extern void DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int pvAttribute, int cbAttribute);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ShowScrollBar(IntPtr hWnd, int wBar, [MarshalAs(UnmanagedType.Bool)] bool bShow);
+
+        private const int SB_VERT = 1; // Vertical scrollbar identifier
+
+        public Form1()
+        {
+            InitializeComponent();
+
+            // Core Multiline Setup
+            terminal.Multiline = true;
+            terminal.ScrollBars = ScrollBars.Vertical;
+            terminal.WordWrap = false;
+
+            // Handle hiding the vertical scrollbar whenever the layout updates or window is resized
+            terminal.SizeChanged += (s, e) => HideTerminalScrollbar();
+            terminal.TextChanged += (s, e) => HideTerminalScrollbar();
+
+            ApplyDarkTitleBar();
+        }
+
+        private void HideTerminalScrollbar()
+        {
+            try
+            {
+                ShowScrollBar(terminal.Handle, SB_VERT, false);
+            }
+            catch { }
+        }
+
+        private void ApplyDarkTitleBar()
+        {
+            try
+            {
+                int attribute = 20;
+                int useDark = 1;
+                DwmSetWindowAttribute(this.Handle, attribute, ref useDark, sizeof(int));
+            }
+            catch { }
+        }
+
+        private async void Form1_Load(object sender, EventArgs e)
+        {
+            HideTerminalScrollbar();
+            await CheckForSelfUpdatesAsync();
+        }
+
+        private async Task CheckForSelfUpdatesAsync()
+        {
+            terminal.AppendText("Checking for updates...");
+            string owner = "pi-40";
+            string repo = "gio-git-github-repo-fetcher";
+            string apiUrl = $"https://api.github.com/repos/{owner}/{repo}/releases";
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) WinFormsTerminal");
+                    HttpResponseMessage response = await client.GetAsync(apiUrl);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string responseJson = await response.Content.ReadAsStringAsync();
+                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                        var rawReleases = JsonSerializer.Deserialize<List<GitHubRelease>>(responseJson, options);
+
+                        if (rawReleases != null && rawReleases.Count > 0 && rawReleases[0].assets != null && rawReleases[0].assets.Count > 0)
+                        {
+                            selfUpdateReleases = rawReleases;
+                            isCheckingForSelfUpdate = true;
+
+                            terminal.AppendText(Environment.NewLine + $"New updates found in release: {rawReleases[0].name ?? rawReleases[0].tag_name}");
+                            terminal.AppendText(Environment.NewLine + "Download updates? (y/n): ");
+                            terminal.SelectionStart = terminal.Text.Length;
+                            lastPromptPosition = terminal.Text.Length;
+                            return;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            PrintPrompt();
+        }
+
+        private async Task HandleSelfUpdateSelectionAsync(string choice)
+        {
+            isCheckingForSelfUpdate = false;
+
+            if (choice.Equals("y", StringComparison.OrdinalIgnoreCase))
+            {
+                var latestRelease = selfUpdateReleases[0];
+                terminal.AppendText("Starting updates...");
+
+                isDownloading = true;
+                foreach (var asset in latestRelease.assets)
+                {
+                    await DownloadAssetAsync(asset);
+                }
+                isDownloading = false;
+                terminal.AppendText(Environment.NewLine + "All updates finished.");
+            }
+
+            PrintPrompt();
+        }
+
+        private void PrintPrompt()
+        {
+            currentMode = NavMode.Normal;
+            terminal.AppendText(Environment.NewLine + currentPrompt);
+            terminal.SelectionStart = terminal.Text.Length;
+            lastPromptPosition = terminal.Text.Length;
+            HideTerminalScrollbar();
+        }
+
+        private async void terminal_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (isDownloading)
+            {
+                e.SuppressKeyPress = true;
+                return;
+            }
+
+            if (e.KeyCode == Keys.Back && terminal.SelectionStart <= lastPromptPosition)
+            {
+                e.SuppressKeyPress = true;
+                return;
+            }
+
+            if (isCheckingForSelfUpdate)
+            {
+                if (e.KeyCode == Keys.Enter)
+                {
+                    e.SuppressKeyPress = true;
+                    string totalText = terminal.Text;
+                    if (totalText.Length < lastPromptPosition) return;
+                    string choice = totalText.Substring(lastPromptPosition).Trim();
+
+                    if (choice.Equals("y", StringComparison.OrdinalIgnoreCase) || choice.Equals("n", StringComparison.OrdinalIgnoreCase))
+                    {
+                        terminal.AppendText(Environment.NewLine);
+                        await HandleSelfUpdateSelectionAsync(choice);
+                    }
+                    else
+                    {
+                        terminal.AppendText(Environment.NewLine + "Please enter 'y' or 'n': ");
+                        terminal.SelectionStart = terminal.Text.Length;
+                        lastPromptPosition = terminal.Text.Length;
+                    }
+                }
+                return;
+            }
+
+            if (currentMode != NavMode.Normal)
+            {
+                if (e.KeyCode == Keys.Down || e.KeyCode == Keys.Up || e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || e.KeyCode == Keys.Enter || (e.Control && e.KeyCode == Keys.E))
+                {
+                    e.SuppressKeyPress = true;
+                    await HandleNavigationKeys(e);
+                    return;
+                }
+            }
+
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                string totalText = terminal.Text;
+                if (totalText.Length < lastPromptPosition) return;
+
+                string commandLine = totalText.Substring(lastPromptPosition).Trim();
+                if (!string.IsNullOrEmpty(commandLine))
+                {
+                    await ProcessCommand(commandLine);
+                }
+                else
+                {
+                    PrintPrompt();
+                }
+            }
+            else if (e.KeyCode == Keys.Down && releases.Count > 0 && currentMode == NavMode.Normal)
+            {
+                e.SuppressKeyPress = true;
+                currentMode = NavMode.Releases;
+                selectedReleaseIndex = 0;
+                selectedPackageIndex = -1;
+                RenderNavigationMenu();
+            }
+        }
+
+        private async Task HandleNavigationKeys(KeyEventArgs e)
+        {
+            if (currentMode == NavMode.Releases)
+            {
+                if (e.KeyCode == Keys.Down)
+                {
+                    selectedReleaseIndex = (selectedReleaseIndex + 1) % releases.Count;
+                    RenderNavigationMenu();
+                }
+                else if (e.KeyCode == Keys.Up)
+                {
+                    selectedReleaseIndex = (selectedReleaseIndex - 1 + releases.Count) % releases.Count;
+                    RenderNavigationMenu();
+                }
+                else if (e.KeyCode == Keys.Right)
+                {
+                    var currentRelease = releases[selectedReleaseIndex];
+                    if (currentRelease.assets != null && currentRelease.assets.Count > 0)
+                    {
+                        currentMode = NavMode.Packages;
+                        selectedPackageIndex = 0;
+                        RenderNavigationMenu();
+                    }
+                }
+                else if (e.KeyCode == Keys.Escape)
+                {
+                    ExitNavigation();
+                }
+            }
+            else if (currentMode == NavMode.Packages)
+            {
+                var currentRelease = releases[selectedReleaseIndex];
+                if (e.KeyCode == Keys.Down)
+                {
+                    selectedPackageIndex = (selectedPackageIndex + 1) % currentRelease.assets.Count;
+                    RenderNavigationMenu();
+                }
+                else if (e.KeyCode == Keys.Up)
+                {
+                    selectedPackageIndex = (selectedPackageIndex - 1 + currentRelease.assets.Count) % currentRelease.assets.Count;
+                    RenderNavigationMenu();
+                }
+                else if (e.KeyCode == Keys.Left)
+                {
+                    currentMode = NavMode.Releases;
+                    selectedPackageIndex = -1;
+                    RenderNavigationMenu();
+                }
+                else if (e.KeyCode == Keys.Enter && selectedPackageIndex >= 0)
+                {
+                    var targetAsset = currentRelease.assets[selectedPackageIndex];
+                    ExitNavigation();
+                    isDownloading = true;
+                    await DownloadAssetAsync(targetAsset);
+                    isDownloading = false;
+                    PrintPrompt();
+                }
+            }
+            else if (currentMode == NavMode.SearchResults)
+            {
+                if (e.KeyCode == Keys.Down)
+                {
+                    selectedSearchIndex = (selectedSearchIndex + 1) % searchResults.Count;
+                    RenderNavigationMenu();
+                }
+                else if (e.KeyCode == Keys.Up)
+                {
+                    selectedSearchIndex = (selectedSearchIndex - 1 + searchResults.Count) % searchResults.Count;
+                    RenderNavigationMenu();
+                }
+                else if (e.Control && e.KeyCode == Keys.E)
+                {
+                    var selectedRepo = searchResults[selectedSearchIndex];
+                    ExitNavigation();
+                    terminal.AppendText(Environment.NewLine + $"Executing: gio-git {selectedRepo.html_url}");
+                    await FetchGitHubReleases(selectedRepo.html_url);
+                }
+                else if (e.KeyCode == Keys.Escape)
+                {
+                    ExitNavigation();
+                }
+            }
+        }
+
+        private void RenderNavigationMenu()
+        {
+            terminal.Select(navStartTextPosition, terminal.Text.Length - navStartTextPosition);
+
+            string menuContent = Environment.NewLine;
+
+            if (currentMode == NavMode.Releases || currentMode == NavMode.Packages)
+            {
+                menuContent += "--- Repository Releases (Use Up/Down to navigate, Right to see files, ESC to exit) ---" + Environment.NewLine;
+                for (int i = 0; i < releases.Count; i++)
+                {
+                    string rPrefix = (currentMode == NavMode.Releases && i == selectedReleaseIndex) ? " > " : "   ";
+                    var rel = releases[i];
+                    menuContent += $"{rPrefix}Release: {rel.name ?? rel.tag_name}" + Environment.NewLine;
+
+                    if (i == selectedReleaseIndex && (rel.assets == null || rel.assets.Count == 0))
+                    {
+                        menuContent += "     [No packages available in this release]" + Environment.NewLine;
+                    }
+                    else if (i == selectedReleaseIndex)
+                    {
+                        for (int j = 0; j < rel.assets.Count; j++)
+                        {
+                            string pPrefix = (currentMode == NavMode.Packages && j == selectedPackageIndex) ? "     => " : "        ";
+                            menuContent += $"{pPrefix}{rel.assets[j].name}" + Environment.NewLine;
+                        }
+                    }
+                }
+            }
+            else if (currentMode == NavMode.SearchResults)
+            {
+                string headerTitle = searchResults.Count == 10 ? "GitHub Hall of Fame" : "GitHub Search Results";
+                menuContent += $"--- {headerTitle} (Use Up/Down to scroll, Ctrl + E to load repo, ESC to exit) ---" + Environment.NewLine;
+
+                for (int i = 0; i < searchResults.Count; i++)
+                {
+                    string sPrefix = (i == selectedSearchIndex) ? " > " : "   ";
+                    menuContent += $"{sPrefix}{searchResults[i].full_name} - [★ {searchResults[i].stargazers_count:N0}]" + Environment.NewLine;
+                }
+            }
+
+            terminal.SelectedText = menuContent;
+            terminal.SelectionStart = terminal.Text.Length;
+            HideTerminalScrollbar();
+        }
+
+        private void ExitNavigation()
+        {
+            terminal.Select(navStartTextPosition, terminal.Text.Length - navStartTextPosition);
+            terminal.SelectedText = string.Empty;
+            HideTerminalScrollbar();
+        }
+
+        private async Task ProcessCommand(string input)
+        {
+            terminal.AppendText(Environment.NewLine);
+
+            if (input.StartsWith("gio-git ", StringComparison.OrdinalIgnoreCase))
+            {
+                string url = input.Substring(8).Trim();
+                await FetchGitHubReleases(url);
+            }
+            else if (input.StartsWith("gio-search ", StringComparison.OrdinalIgnoreCase))
+            {
+                string searchQuery = input.Substring(11).Trim();
+                await SearchGitHubRepositories(searchQuery);
+            }
+            else if (input.Equals("gio-HallOfFame", StringComparison.OrdinalIgnoreCase))
+            {
+                await FetchHallOfFameRepositories();
+            }
+            else
+            {
+                terminal.AppendText($"Unknown command: {input}");
+                PrintPrompt();
+            }
+        }
+
+        private async Task FetchGitHubReleases(string url)
+        {
+            string cleanUrl = url.Replace("[", "").Replace("]", "")
+                                 .Replace("https://github.com/", "")
+                                 .Replace("http://github.com/", "")
+                                 .Trim('/');
+
+            string[] parts = cleanUrl.Split('/');
+            if (parts.Length < 2)
+            {
+                terminal.AppendText("Error: Invalid GitHub repository link format.");
+                PrintPrompt();
+                return;
+            }
+
+            string owner = parts[0].Trim();
+            string repo = parts[1].Trim();
+            string apiUrl = $"https://api.github.com/repos/{owner}/{repo}/releases";
+
+            terminal.AppendText("Fetching release info from GitHub...");
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) WinFormsTerminal");
+                    HttpResponseMessage response = await client.GetAsync(apiUrl);
+
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        terminal.AppendText(Environment.NewLine + $"Error 404: Repository '{owner}/{repo}' not found.");
+                        PrintPrompt();
+                        return;
+                    }
+
+                    response.EnsureSuccessStatusCode();
+                    string responseJson = await response.Content.ReadAsStringAsync();
+
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var rawReleases = JsonSerializer.Deserialize<List<GitHubRelease>>(responseJson, options);
+
+                    if (rawReleases != null && rawReleases.Count > 0)
+                    {
+                        releases = rawReleases;
+                        foreach (var rel in releases)
+                        {
+                            if (rel.assets != null) rel.assets = rel.assets.OrderBy(a => a.name).ToList();
+                        }
+
+                        navStartTextPosition = terminal.Text.Length;
+                        currentMode = NavMode.Releases;
+                        selectedReleaseIndex = 0;
+                        selectedPackageIndex = -1;
+                        RenderNavigationMenu();
+                        return;
+                    }
+                    else
+                    {
+                        terminal.AppendText(Environment.NewLine + "No public releases found for this repository.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                terminal.AppendText(Environment.NewLine + $"Network error: {ex.Message}");
+            }
+
+            PrintPrompt();
+        }
+
+        private async Task SearchGitHubRepositories(string query)
+        {
+            if (string.IsNullOrEmpty(query))
+            {
+                terminal.AppendText("Error: Search query cannot be blank.");
+                PrintPrompt();
+                return;
+            }
+
+            terminal.AppendText($"Searching GitHub repositories for '{query}'...");
+            string apiUrl = $"https://api.github.com/search/repositories?q={Uri.EscapeDataString(query)}&per_page=15";
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) WinFormsTerminal");
+                    HttpResponseMessage response = await client.GetAsync(apiUrl);
+                    response.EnsureSuccessStatusCode();
+
+                    string responseJson = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var searchResponse = JsonSerializer.Deserialize<GitHubSearchResponse>(responseJson, options);
+
+                    if (searchResponse != null && searchResponse.Items != null && searchResponse.Items.Count > 0)
+                    {
+                        searchResults = searchResponse.Items;
+                        navStartTextPosition = terminal.Text.Length;
+                        currentMode = NavMode.SearchResults;
+                        selectedSearchIndex = 0;
+                        RenderNavigationMenu();
+                        return;
+                    }
+                    else
+                    {
+                        terminal.AppendText(Environment.NewLine + "No repositories found matching that query.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                terminal.AppendText(Environment.NewLine + $"Search error: {ex.Message}");
+            }
+
+            PrintPrompt();
+        }
+
+        private async Task FetchHallOfFameRepositories()
+        {
+            terminal.AppendText("Loading GitHub Hall of Fame (Top 10 Most Starred Repositories)...");
+            string apiUrl = "https://api.github.com/search/repositories?q=stars:>10000&sort=stars&order=desc&per_page=10";
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) WinFormsTerminal");
+                    HttpResponseMessage response = await client.GetAsync(apiUrl);
+                    response.EnsureSuccessStatusCode();
+
+                    string responseJson = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var searchResponse = JsonSerializer.Deserialize<GitHubSearchResponse>(responseJson, options);
+
+                    if (searchResponse != null && searchResponse.Items != null && searchResponse.Items.Count > 0)
+                    {
+                        searchResults = searchResponse.Items;
+                        navStartTextPosition = terminal.Text.Length;
+                        currentMode = NavMode.SearchResults;
+                        selectedSearchIndex = 0;
+                        RenderNavigationMenu();
+                        return;
+                    }
+                    else
+                    {
+                        terminal.AppendText(Environment.NewLine + "Failed to parse the Hall of Fame response.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                terminal.AppendText(Environment.NewLine + $"API Error: {ex.Message}");
+            }
+
+            PrintPrompt();
+        }
+
+        private async Task DownloadAssetAsync(GitHubAsset asset)
+        {
+            terminal.AppendText($"Downloading: {asset.name}...");
+            string destinationPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, asset.name);
+
+            terminal.AppendText(Environment.NewLine);
+            int progressLineStart = terminal.Text.Length;
+            terminal.AppendText("[░░░░░░░░░░░░░░░░░░░░] 0%");
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) WinFormsTerminal");
+                    using (HttpResponseMessage response = await client.GetAsync(asset.browser_download_url, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        long? totalBytes = response.Content.Headers.ContentLength;
+
+                        using (Stream contentStream = await response.Content.ReadAsStreamAsync(),
+                                      fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                        {
+                            var buffer = new byte[8192];
+                            long totalReadBytes = 0;
+                            int readBytes;
+                            int lastPercentage = -1;
+
+                            while ((readBytes = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                            {
+                                await fileStream.WriteAsync(buffer, 0, readBytes);
+                                totalReadBytes += readBytes;
+
+                                if (totalBytes.HasValue)
+                                {
+                                    int percentage = (int)((double)totalReadBytes / totalBytes.Value * 100);
+                                    if (percentage != lastPercentage)
+                                    {
+                                        lastPercentage = percentage;
+                                        UpdateConsoleProgressBar(progressLineStart, percentage);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                terminal.AppendText(Environment.NewLine + $"Success! Saved directly to: {destinationPath}");
+            }
+            catch (Exception ex)
+            {
+                terminal.AppendText(Environment.NewLine + $"Download Failed: {ex.Message}");
+            }
+            finally
+            {
+                HideTerminalScrollbar();
+            }
+        }
+
+        private void UpdateConsoleProgressBar(int startPosition, int percentage)
+        {
+            int totalBlocks = 20;
+            int filledBlocks = percentage / (100 / totalBlocks);
+            int emptyBlocks = totalBlocks - filledBlocks;
+
+            string filled = new string('█', filledBlocks);
+            string empty = new string('░', emptyBlocks);
+            string progressBarText = $"[{filled}{empty}] {percentage}%";
+
+            terminal.Select(startPosition, terminal.Text.Length - startPosition);
+            terminal.SelectedText = progressBarText;
+            HideTerminalScrollbar();
+        }
+    }
+
+    public class GitHubSearchResponse
+    {
+        public List<GitHubRepo> Items { get; set; }
+    }
+
+    public class GitHubRepo
+    {
+        public string full_name { get; set; }
+        public string html_url { get; set; }
+        public int stargazers_count { get; set; }
+    }
+
+    public class GitHubRelease
+    {
+        public string tag_name { get; set; }
+        public string name { get; set; }
+        public List<GitHubAsset> assets { get; set; }
+    }
+
+    public class GitHubAsset
+    {
+        public string name { get; set; }
+        public string browser_download_url { get; set; }
+    }
+}
