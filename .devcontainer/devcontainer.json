@@ -1,0 +1,25 @@
+{
+  "name": "Go GitHub Fetcher Dev Environment",
+  "image": "://microsoft.com",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "local",
+        "go.useLanguageServer": true,
+        "gopls": {
+          "ui.semanticTokens": true
+        }
+      },
+      "extensions": [
+        "golang.go",
+        "github.vscode-github-actions",
+        "eamodio.gitlens"
+      ]
+    }
+  },
+  "postCreateCommand": "go version && git version",
+  "remoteUser": "vscode"
+}
