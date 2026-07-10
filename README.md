@@ -2,7 +2,7 @@
 ![Static Badge](https://img.shields.io/badge/.NET__10.0-512bd4) ![Static Badge](https://img.shields.io/badge/C%23_-145124)
 ![GitHub Repo](https://img.shields.io/badge/github-repo-blue?logo=github) ![YouTube Channel Subscribers](https://img.shields.io/youtube/channel/subscribers/UCkYln5VJT8CeP8KQpL6S3GA)
 
-<img width="1000" height="1000" alt="1000096381" src="https://github.com/user-attachments/assets/cfcf394a-11cb-4fff-8b8c-307b8ebaeaf0" />
+<img width="300" height="300" alt="1000096381" src="https://github.com/user-attachments/assets/cfcf394a-11cb-4fff-8b8c-307b8ebaeaf0" />
 
 
 
