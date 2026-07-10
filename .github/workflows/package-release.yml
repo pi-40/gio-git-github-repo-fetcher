@@ -1,8 +1,12 @@
-name: Package Release
+name: Package Release (Manual Trigger)
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'The tag name of the release to package (e.g., v1.0.0)'
+        required: true
+        type: string
 
 jobs:
   build-and-package:
@@ -14,9 +18,10 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.release_tag }}
 
-      # Add your build steps here. 
-      # Example for a C# / .NET project:
+      # Setup .NET environment for C# builds
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -25,6 +30,6 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release
 
-      # Example: Publishing a NuGet package to GitHub Packages
+      # Publishes the NuGet package directly to your GitHub repository registry
       - name: Publish Package
         run: dotnet nuget push **/*.nupkg --source "https://nuget.pkg.github.com/pi-40/index.json" --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
