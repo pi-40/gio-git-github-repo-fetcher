@@ -27,6 +27,10 @@ This program was made as a C# WinForms app rather than an Insiders version. It w
 | .Net10.0 Framework |
 | Windows x64 Computer|
 
+## License
+
+**License:** This Project Is Licensed Under MIT License
+
 ## Socials
 https://youtube.com/@gscnglobal?si=e7itRm6MZHbKcMcS
 
