@@ -40,8 +40,8 @@ gio-git https://github.com/pi-40/gio-git-github-repo-fetcher
 ```
 
 ## Import To Visual Studio
-```
-git clone https://github.com && code-insiders gio-git-github-repo-fetcher
+```bash
+dotnet tool install -g gio-git
 ```
 
 ## 1.0.2
