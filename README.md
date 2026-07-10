@@ -16,3 +16,12 @@ the packages menu. Once you are at the
 packages, press A to download Release 1 in
 alphabetical order (e.g., Release 1: press
 A, Release 2: press B). It should start downloading once you do. If not, then check your spelling.Step 6: Once it gets done downloading your package, go inside the directory that has the program inside, and your package should be there.
+## Why Was This Program Made?
+This was made because downloading things through the terminal is a total headache and just too hard to figure out. That's why I created this—to give everyone an easy alternative that doesn't require typing in a bunch of commands.
+## How Was This Program Made
+This program was made as a C# WinForms app rather than an Insiders version. It was originally created on July 9th, and the whole concept was based off the Linux terminal.
+
+| Requirements |
+| :--- |
+| .Net10.0 Framework |
+| Windows x64 Computer|
